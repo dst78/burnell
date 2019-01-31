@@ -46,8 +46,11 @@ void printBinary(int n) {
 int setRegisterBits(int mask, int ticks, int ticksThreshold, int hiLen, int bit) {
 
   if (ticks % ticksThreshold == hiLen) {
+    // set low
     mask &= ~(1 << bit);
+
   } else if (ticks % ticksThreshold == 0) {
+    // set high
     mask |= (1 << bit);
   }
 
@@ -57,7 +60,8 @@ int setRegisterBits(int mask, int ticks, int ticksThreshold, int hiLen, int bit)
 void writeRegister(int prog, int clock, int mask) {
   static int oldData = 0;
 
-  if (oldData != (clock & mask)) {
+  //if (oldData != (clock & mask)) {
+  if (oldData != mask) {
     printf("%06d  ", prog);
     printBinary(clock);
     printf("  ");
@@ -68,7 +72,8 @@ void writeRegister(int prog, int clock, int mask) {
     printBinary(clock & mask);
     printf("\n");
 
-    oldData = clock & mask;
+    //oldData = clock & mask;
+    oldData = mask;
   }
 }
 

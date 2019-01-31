@@ -33,11 +33,11 @@ uint16_t const gateMin = 5;  // 5% minimum gate length, increased to resolution
 uint16_t const gateMax = 95; // 95% maximum gate length, increased to resolution
 uint16_t gateLen;
 
-volatile uint16_t clockState;
-volatile uint16_t divState;
-volatile uint16_t clockStateMask;
-volatile uint16_t divState2;
-volatile uint8_t clkResCount;
+volatile uint8_t clockState;
+volatile uint8_t divState;
+volatile uint8_t clockStateMask;
+volatile uint8_t divState2;
+volatile uint16_t clkResCount;
 
 
 void setup() {
@@ -115,9 +115,9 @@ void loop() {
 void reset() {
   clockState     = 0x00;
   divState       = 0x00;  
-  clockStateMask = 0b00101111;
+  clockStateMask = 0x00;
   divState2      = 0x00;
-  clkResCount    = 0;
+  clkResCount    = 100;
   
   writeRegisters(clockState, divState);
 }
@@ -129,40 +129,41 @@ void writeRegisters(uint8_t clk, int8_t divi) {
   digitalWrite(SHIFTREG_RCLK, HIGH);  
 }
 
+/**
+ * manipulates a bit of the clock mask in a generic way
+ *
+ * @param uint8_t  mask              mask to manipulate
+ * @param uint16_t ticks             current clock ticks
+ * @param uint16_t ticksThreshold    threshold when the current bit should go high
+ * @param uint16_t hiLen             how many ticks the current bit should remain high
+ * @param uint8_t bit                which bit to manipulate
+ * @return uint8_t                   the manipulate clock mask
+ */
+int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint16_t hiLen, uint8_t bit) {
+
+  if (ticks % ticksThreshold == hiLen) {
+    // set low
+    mask &= ~(1 << bit);
+    
+  } else if (ticks % ticksThreshold == 0) {
+    // set high
+    mask |= (1 << bit);
+  }
+
+  return mask;
+}
+
 void advanceClock() {
   clkResCount++;
   
-  
-  if (clkResCount % 3200 == 0) {
-    clkResCount = 0;    
-    clockStateMask |= (1 << 5);
-    //clockStateMask = 0b00101111;
-  }
-  if (clkResCount % 800 == 0) {
-    clockStateMask |= (1 << 3);
-  }
-  if (clkResCount % 400 == 0) {
-    clockStateMask |= (1 << 2);
-  }
-  if (clkResCount % 200 == 0) {
-    clockStateMask |= (1 << 1);
-  }
-  if (clkResCount % 100 == 0) {
-    clockState++;
-    clockStateMask |= (1 << 0);
-  } 
-  
-  if (clkResCount == gateLen) {
-    clockStateMask &= ~(1 << 0);
-  } else if (clkResCount == gateLen * 2) {
-    clockStateMask &= ~(1 << 1);
-  } else if (clkResCount == gateLen * 4) {
-    clockStateMask &= ~(1 << 2);
-  } else if (clkResCount == gateLen * 8) {
-    clockStateMask &= ~(1 << 3);   
-  } else if (clkResCount == gateLen * 32) {
-    clockStateMask &= ~(1 << 5);
-  }
+  if (clkResCount % 100 == 0) {clockState++;;}
+
+  // set relevant clock bits hi/lo according to our metric
+  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 100, gateLen, 0);
+  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 200, gateLen * 2, 1);
+  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 400, gateLen * 4, 2);
+  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 800, gateLen * 8, 3);
+  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 3200, gateLen * 32, 5);
   
   writeRegisters(clockState & clockStateMask, divState2);
 }
