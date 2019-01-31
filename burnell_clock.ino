@@ -35,8 +35,6 @@ uint16_t gateLen;
 
 volatile uint8_t clockState;
 volatile uint8_t divState;
-volatile uint8_t clockStateMask;
-volatile uint8_t divState2;
 volatile uint16_t clkResCount;
 
 
@@ -115,8 +113,6 @@ void loop() {
 void reset() {
   clockState     = 0x00;
   divState       = 0x00;  
-  clockStateMask = 0x00;
-  divState2      = 0x00;
   clkResCount    = 100;
   
   writeRegisters(clockState, divState);
@@ -156,14 +152,12 @@ int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint1
 void advanceClock() {
   clkResCount++;
   
-  if (clkResCount % 100 == 0) {clockState++;;}
-
   // set relevant clock bits hi/lo according to our metric
-  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 100, gateLen, 0);
-  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 200, gateLen * 2, 1);
-  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 400, gateLen * 4, 2);
-  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 800, gateLen * 8, 3);
-  clockStateMask = setRegisterBits(clockStateMask, clkResCount, 3200, gateLen * 32, 5);
+  clockState = setRegisterBits(clockState, clkResCount, 100, gateLen, 0);
+  clockState = setRegisterBits(clockState, clkResCount, 200, gateLen * 2, 1);
+  clockState = setRegisterBits(clockState, clkResCount, 400, gateLen * 4, 2);
+  clockState = setRegisterBits(clockState, clkResCount, 800, gateLen * 8, 3);
+  clockState = setRegisterBits(clockState, clkResCount, 3200, gateLen * 32, 5);
   
-  writeRegisters(clockState & clockStateMask, divState2);
+  writeRegisters(clockState, divState);
 }

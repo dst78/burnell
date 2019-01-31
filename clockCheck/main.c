@@ -14,12 +14,10 @@ const int ITERATIONS = 6400;
 int iterations;
 int gateLen;
 int clockState;
-int clockMask;
 int progress;
 
 void reset() {
   clockState = 0x00;
-  clockMask  = 0x00;
   progress   = 0;
 }
 
@@ -57,23 +55,16 @@ int setRegisterBits(int mask, int ticks, int ticksThreshold, int hiLen, int bit)
   return mask;
 }
 
-void writeRegister(int prog, int clock, int mask) {
+void writeRegister(int prog, int clock) {
   static int oldData = 0;
 
-  //if (oldData != (clock & mask)) {
-  if (oldData != mask) {
+  //if (oldData != clock) {
+  if (oldData != clock) {
     printf("%06d  ", prog);
     printBinary(clock);
-    printf("  ");
-    printBinary(mask);
-    printf("   ");
-    printBinary(oldData ^ (clock & mask));
-    printf("  ");
-    printBinary(clock & mask);
     printf("\n");
 
-    //oldData = clock & mask;
-    oldData = mask;
+    oldData = clock;
   }
 }
 
@@ -83,13 +74,13 @@ void advanceClock() {
   if (progress % 100 == 0) {clockState++;;}
 
   // set relevant clock bits hi/lo according to our metric
-  clockMask = setRegisterBits(clockMask, progress, 100, gateLen, 0);
-  clockMask = setRegisterBits(clockMask, progress, 200, gateLen * 2, 1);
-  clockMask = setRegisterBits(clockMask, progress, 400, gateLen * 4, 2);
-  clockMask = setRegisterBits(clockMask, progress, 800, gateLen * 8, 3);
-  clockMask = setRegisterBits(clockMask, progress, 3200, gateLen * 32, 5);
+  clockState = setRegisterBits(clockState, progress, 100, gateLen, 0);
+  clockState = setRegisterBits(clockState, progress, 200, gateLen * 2, 1);
+  clockState = setRegisterBits(clockState, progress, 400, gateLen * 4, 2);
+  clockState = setRegisterBits(clockState, progress, 800, gateLen * 8, 3);
+  clockState = setRegisterBits(clockState, progress, 3200, gateLen * 32, 5);
 
-  writeRegister(progress, clockState, clockMask);
+  writeRegister(progress, clockState);
 }
 
 int main(int argc, char *argv[]) {
@@ -122,9 +113,10 @@ int main(int argc, char *argv[]) {
   printf("testing clock progression\n");
   printf("gate length: %d/100\n", gateLen);
   printf("iterations : %d\n", iterations);
+  printf("ticks not printed means no change in clock signal\n\n");
 
-  printf("ticks   clock     mask       delta     clock out\n");
-  printf("------------------------------------------------\n");
+  printf("ticks   clock   \n");
+  printf("----------------\n");
 
   for (int c = 0; c < iterations; c++) {
     advanceClock();
