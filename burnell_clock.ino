@@ -1,6 +1,7 @@
-#include <TimerOne.h>
+#include <RBD_MicroTimer.h>
 
-TimerOne clockTimer;
+RBD::MicroTimer clockTimer;
+RBD::MicroTimer divTimer;
 
 #define DEBUG false
 
@@ -23,34 +24,42 @@ TimerOne clockTimer;
 #define GATELEN_IN       A1
 #define DIVMODE_IN       A0
 
+
+// program constants
 #define DIVMODE_CLOCK     0
 #define DIVMODE_POW       1
 #define DIVMODE_PRIME     2
 #define DIVMODE_FIBONACCI 3
-#define DIVMODE_TEST      4
+
+#define GATELEN_MIN       5
+#define GATELEN_MAX      95
+
+#define GATEMODE_VARIABLE 0
+#define GATEMODE_FIXED    1
 
 // array of divisions for clock divider
-uint16_t divs[5][8] = {
+uint16_t divs[4][8] = {
   {100, 200, 400, 800, 1600, 3200, 6400, 12800},  // internal clock
-  {  2,   4,   8,  16,   32,   64,  128,   256}, // power of two
-  {  2,   3,   5,   7,   11,   13,   17,    19}, // prime numbers
-  {  2,   3,   5,   8,   13,   21,   34,    55}, // fibonacci sequence
-  {  1,   2,   4,   8,   16,   32,   64,   128}, // for testing
+  {100, 200, 400, 800, 1600, 3200, 6400, 12800}, // power of two
+  {200, 300, 500, 700, 1100, 1300, 1700,  1900}, // prime numbers
+  {200, 300, 500, 800, 1300, 2100, 3400,  5500}, // fibonacci sequence
 };
 
 uint16_t speedMin = 10;
 uint16_t speedMax = 300;
 double clkSpeed;
-uint16_t const gateMin = 5;  // 5% minimum gate length, increased to resolution
-uint16_t const gateMax = 95; // 95% maximum gate length, increased to resolution
 uint16_t gateLen;
+uint8_t gateMode;
 
-volatile uint8_t clockState;
-volatile uint16_t clkResCount;
+uint8_t clockState;
+uint16_t clkResCount;
 
-uint8_t divMode = DIVMODE_CLOCK;
-volatile uint8_t divState;
-volatile uint16_t divResCount;
+uint8_t divMode;
+uint8_t divState;
+
+uint16_t divResCount;
+double divClkSpeed;
+volatile uint32_t divInterruptTime1, divInterruptTime2;
 
 
 void setup() {
@@ -73,6 +82,8 @@ void setup() {
   pinMode(GATELEN_IN, INPUT);
   pinMode(DIVMODE_IN, INPUT);
 
+  gateMode = GATEMODE_VARIABLE;
+  divMode  = DIVMODE_POW;
   /**
    * 1 beat is giving BPM
    * we're outputting up to resolution of 32ths, which is 1/8ths of 1 beat
@@ -80,13 +91,15 @@ void setup() {
    * with adjustable gatelengths we need to be precise to 100th of 1/32ths.
    */
   clkSpeed    = 10000.0 / (map(389, 0, 1023, speedMin, speedMax) / 7.5); // 120 BPM in 3200ths resolution
-  gateLen     = map(512, 0, 1023, gateMin, gateMax);
+  gateLen     = map(512, 0, 1023, GATELEN_MIN, GATELEN_MAX);
+  clockTimer.setTimeout(clkSpeed);
 
-  clockTimer.initialize(clkSpeed);
-  clockTimer.attachInterrupt(advanceClock);
+  divClkSpeed = 0;
+  divTimer.setTimeout(divClkSpeed);
+  divTimer.stop();
 
   // attach interrupt to clock division input
-  attachInterrupt(digitalPinToInterrupt(DIV_IN), handleClockDivTrigger, RISING);
+  attachInterrupt(digitalPinToInterrupt(DIV_IN), handleDivClockTrigger, RISING);
   // reset clock & update registers
   reset();
 
@@ -104,7 +117,7 @@ void setup() {
 void loop() {
   double raw, bpm, clockUs;
 
-  gateLen = map(analogRead(GATELEN_IN), 0, 1023, gateMin, gateMax);
+  gateLen = (float) map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
   
   raw     = analogRead(SPEED_IN);
   bpm     = map(raw, 0, 1023, speedMin, speedMax);
@@ -114,7 +127,7 @@ void loop() {
   
   if (clockUs != clkSpeed) {
     clkSpeed = clockUs;
-    clockTimer.setPeriod(clkSpeed);
+    clockTimer.setTimeout(clkSpeed);
 
     #if DEBUG
       Serial.print(" raw: ");
@@ -126,6 +139,14 @@ void loop() {
       Serial.print(" gateLen: ");
       Serial.println(gateLen);
     #endif
+  }
+
+  if (clockTimer.onRestart()) {
+    advanceClock();
+  }
+
+  if (divTimer.onRestart()) {
+    advanceDivClock();
   }
 }
 
@@ -158,18 +179,32 @@ void writeRegisters(uint8_t clk, int8_t divi) {
  * @param uint16_t ticks             current clock ticks
  * @param uint16_t ticksThreshold    threshold when the current bit should go high
  * @param uint16_t hiLen             how many ticks the current bit should remain high
+ * @param uint16_t hiLenMult         multiplicator for the hiLen value
  * @param uint8_t bit                which bit to manipulate
  * @return uint8_t                   the manipulate clock mask
  */
-int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint16_t hiLen, uint8_t bitv) {
+int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint16_t hiLen, uint16_t hiLenMult, uint8_t bitv) {
 
-  if (ticks % ticksThreshold == hiLen) {
-    // set low
-    mask &= ~(1 << bitv);
+  if (gateMode = GATEMODE_VARIABLE) {
+    if (ticks % ticksThreshold == hiLen * hiLenMult) {
+      // set low
+      mask &= ~(1 << bitv);
+      
+    } else if (ticks % ticksThreshold == 0) {
+      // set high
+      mask |= (1 << bitv);
+    }
     
-  } else if (ticks % ticksThreshold == 0) {
-    // set high
-    mask |= (1 << bitv);
+  } else {
+    // fixed gateMode
+    if (ticks % ticksThreshold == hiLen) {
+      // set low
+      mask &= ~(1 << bitv);
+      
+    } else if (ticks % ticksThreshold == 0) {
+      // set high
+      mask |= (1 << bitv);
+    }
   }
 
   return mask;
@@ -182,11 +217,11 @@ void advanceClock() {
   clkResCount++;
 
   // set relevant clock bits hi/lo according to our metric
-  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][0], gateLen, 0);
-  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][1], gateLen * 2, 1);
-  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][2], gateLen * 4, 2);
-  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][3], gateLen * 8, 3);
-  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][5], gateLen * 32, 5);
+  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][0], gateLen,  1, 0);
+  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][1], gateLen,  2, 1);
+  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][2], gateLen,  4, 2);
+  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][3], gateLen,  8, 3);
+  clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][5], gateLen, 32, 5);
   
   writeRegisters(clockState, divState);
 }
@@ -194,24 +229,31 @@ void advanceClock() {
 /**
  * interrupt handler when a rising signal on the clock division pin was detected.
  */
-void handleClockDivTrigger() {
-  
+void handleDivClockTrigger() {
+  volatile uint32_t now = micros();
+
+  divInterruptTime1 = divInterruptTime2;
+  divInterruptTime2 = now;
+  divClkSpeed = (divInterruptTime2 - divInterruptTime1) / 100.0;
+
+  divTimer.setTimeout(divClkSpeed);
+  divTimer.restart();
 }
 
 /**
  * advances the clock divider, called by TimerOne
  */
-void advanceClockDiv() {
+void advanceDivClock() {
   divResCount++;
 
-  divState = setRegisterBits(divState, divResCount, divs[divMode][0], 1, 0);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][1], 1, 1);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][2], 1, 2);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][3], 1, 3);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][4], 1, 4);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][5], 1, 5);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][6], 1, 6);
-  divState = setRegisterBits(divState, divResCount, divs[divMode][7], 1, 7);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][0], gateLen, divs[divMode][0] / 100, 0);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][1], gateLen, divs[divMode][1] / 100, 1);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][2], gateLen, divs[divMode][2] / 100, 2);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][3], gateLen, divs[divMode][3] / 100, 3);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][4], gateLen, divs[divMode][4] / 100, 4);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][5], gateLen, divs[divMode][5] / 100, 5);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][6], gateLen, divs[divMode][6] / 100, 6);
+  divState = setRegisterBits(divState, divResCount, divs[divMode][7], gateLen, divs[divMode][7] / 100, 7);
 
   writeRegisters(clockState, divState);
 }
