@@ -1,3 +1,7 @@
+#include <PinChangeInterrupt.h>
+#include <PinChangeInterruptBoards.h>
+#include <PinChangeInterruptPins.h>
+#include <PinChangeInterruptSettings.h>
 #include <RBD_MicroTimer.h>
 
 RBD::MicroTimer clockTimer;
@@ -34,8 +38,11 @@ RBD::MicroTimer divTimer;
 #define GATELEN_MIN       5
 #define GATELEN_MAX      95
 
-#define GATEMODE_VARIABLE 0
-#define GATEMODE_FIXED    1
+#define GATEMODE_VARIABLE true
+#define GATEMODE_FIXED    false
+
+#define STARTED           true
+#define STOPPED           false
 
 // array of divisions for clock divider
 uint16_t divs[4][8] = {
@@ -49,23 +56,27 @@ uint16_t speedMin = 10;
 uint16_t speedMax = 300;
 double clkSpeed;
 uint16_t gateLen;
-uint8_t gateMode;
+volatile bool gateMode;
+volatile bool started;
 
-uint8_t clockState;
-uint16_t clkResCount;
+volatile uint8_t clockState;
+volatile uint16_t clkResCount;
 
 uint8_t divMode;
 uint8_t divState;
 
-uint16_t divResCount;
-double divClkSpeed;
+volatile uint16_t divResCount;
+volatile double divClkSpeed;
 volatile uint32_t divInterruptTime1, divInterruptTime2;
 
 
 void setup() {
+  started  = STARTED;
+  gateMode = GATEMODE_FIXED;
+  divMode  = DIVMODE_POW;
+  
   // set up interrupt pins
   pinMode(DIV_IN, INPUT);
-  pinMode(RESET_IN, INPUT);
   
   // set up digital output pins
   pinMode(SHIFTREG_SER, OUTPUT);
@@ -74,16 +85,15 @@ void setup() {
   pinMode(RST_OUT, OUTPUT);
   
   // set up digital input pins
-  pinMode(GATEMODE_IN, INPUT_PULLUP);
-  pinMode(STARTSTOP_IN, INPUT_PULLUP);
-  
+  attachPCINT(digitalPinToPCINT(GATEMODE_IN), handleGateModeChange, RISING);
+  attachPCINT(digitalPinToPCINT(STARTSTOP_IN), handleStartStop, RISING);
+  attachPCINT(digitalPinToPCINT(RESET_IN), reset, RISING);
+
   // set up analog input pins
   pinMode(SPEED_IN, INPUT);
   pinMode(GATELEN_IN, INPUT);
   pinMode(DIVMODE_IN, INPUT);
 
-  gateMode = GATEMODE_VARIABLE;
-  divMode  = DIVMODE_POW;
   /**
    * 1 beat is giving BPM
    * we're outputting up to resolution of 32ths, which is 1/8ths of 1 beat
@@ -141,12 +151,14 @@ void loop() {
     #endif
   }
 
-  if (clockTimer.onRestart()) {
-    advanceClock();
-  }
-
-  if (divTimer.onRestart()) {
-    advanceDivClock();
+  if (started) {
+    if (clockTimer.onRestart()) {
+      advanceClock();
+    }
+  
+    if (divTimer.onRestart()) {
+      advanceDivClock();
+    }
   }
 }
 
@@ -158,7 +170,10 @@ void reset() {
   divState       = 0x00;  
   clkResCount    = 0;
   divResCount    = 0;
-  
+
+  digitalWrite(RST_OUT, HIGH);
+  delay(5);
+  digitalWrite(RST_OUT, LOW);
   writeRegisters(clockState, divState);
 }
 
@@ -185,7 +200,7 @@ void writeRegisters(uint8_t clk, int8_t divi) {
  */
 int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint16_t hiLen, uint16_t hiLenMult, uint8_t bitv) {
 
-  if (gateMode = GATEMODE_VARIABLE) {
+  if (gateMode == GATEMODE_VARIABLE) {
     if (ticks % ticksThreshold == hiLen * hiLenMult) {
       // set low
       mask &= ~(1 << bitv);
@@ -256,4 +271,14 @@ void advanceDivClock() {
   divState = setRegisterBits(divState, divResCount, divs[divMode][7], gateLen, divs[divMode][7] / 100, 7);
 
   writeRegisters(clockState, divState);
+}
+
+void handleGateModeChange() {
+  gateMode = !gateMode;
+}
+
+void handleStartStop() {
+  started = !started;
+
+  if (!started) {writeRegisters(0x00, 0x00);}
 }
