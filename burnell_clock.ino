@@ -37,6 +37,8 @@ RBD::MicroTimer divTimer;
 
 #define GATELEN_MIN       5
 #define GATELEN_MAX      95
+#define CLOCK_SPEED_MIN  10
+#define CLOCK_SPEED_MAX 300
 
 #define GATEMODE_VARIABLE true
 #define GATEMODE_FIXED    false
@@ -52,8 +54,6 @@ uint16_t divs[4][8] = {
   {200, 300, 500,  800, 1300, 2100,  3400,  5500}, // fibonacci sequence
 };
 
-uint16_t speedMin = 10;
-uint16_t speedMax = 300;
 double clkSpeed;
 uint16_t gateLen;
 volatile bool gateMode;
@@ -100,7 +100,7 @@ void setup() {
    * 
    * with adjustable gatelengths we need to be precise to 100th of 1/32ths.
    */
-  clkSpeed    = 10000.0 / (map(389, 0, 1023, speedMin, speedMax) / 7.5); // 120 BPM in 3200ths resolution
+  clkSpeed    = 10000.0 / (map(389, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX) / 7.5); // 120 BPM in 3200ths resolution
   gateLen     = map(512, 0, 1023, GATELEN_MIN, GATELEN_MAX);
   clockTimer.setTimeout(clkSpeed);
 
@@ -130,7 +130,7 @@ void loop() {
   gateLen = (float) map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
   
   raw     = analogRead(SPEED_IN);
-  bpm     = map(raw, 0, 1023, speedMin, speedMax);
+  bpm     = map(raw, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
   // 10000 is 100ths of 1000000 which is 1 sec in microseconds
   // 7.5 is 1/8ths of 60, which gives us 1/32ths resolution
   clockUs = 10000.0 / (bpm / 7.5);  
