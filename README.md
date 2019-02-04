@@ -1,36 +1,31 @@
 # Burnell :: Clock and Clock Divider
 
-- gatelength adjustable with pot
-
 ## Abstract
 This is a combined clock generator and clock divider module based on an Arduino Nano.
 
-
 ## Clock features
-Clock speed adjustable via potentiometer. (duh)
-Gate length adjustable via potentiometer.
+- Clock speed adjustable via potentiometer between 10 and 300 BPM.
+- Gate length adjustable via potentiometer and gate / trigger toggle switch.
+- Switches for start/stop and reset.
+- Reset trigger output.
+- Clock outputs for beat, bar, 8ths, 16ths and 32ths.
 
-Pushbuttons for start/stop and reset.
+## Function of the gate length control
+The gate length potentiometer varies the length of the high-state of an output between 5% and 95% of its interval.
 
-Reset trigger output.
+This makes the module useful for both triggers and to control envelopes and similar modules which require long gates.
 
-Clock outputs for beat, bar, 8ths, 16ths and 32ths.
-
-Toggle switch to change modes between trigger and gate
-- In trigger mode the high state of any output is restricted to the length of the high state of the 16ths signal. 
-- In gate mode any output the high-time depends on the gate length pot.
-
+When the gate / trigger switch is in the trigger position then the high-state length of all outputs equals that of the 32ths output instead. You can still control the 32ths output gate length with the gate length potentiometer as before.
 
 ## Clock divider features
-The clock divider part has an external clock input though so you can use it to divide an external pulse just as well as the internal clock. By default the clock divider is normalled to the bar output of the clock.
+The clock divider section of the module has an external clock input so you can use it to divide an external pulse just as well as the internal clock. By default the clock divider is normalled to the bar output of the clock section.
 
 The divider can be switched between three modes, which changes the outputs to:
 - power of two: 2, 4, 8, 16, 32, 64, 128, 256
-- prime       : 2, 3, 5,  7, 11, 13,  17,  19 
-- finbonacci  : 2, 3, 5,  8, 13, 21,  34,  55
+- primes      : 2, 3, 5, 7, 11, 13, 17,  19
+- fibonacci   : 2, 3, 5, 8, 13, 21, 34,  55
 
-When the main module is in trigger mode, all outputs will be high for the amount of time that the clock divider input is high. Is it in gate mode, then the high-time depends on the gate length pot.
-
+The gate / trigger toggle switch of the clock section affects the gate length of the clock divider in the same way that it affects the clock outputs.
 
 ## What's in the name
 The module was named after [Jocelyn Bell Burnell](https://en.wikipedia.org/wiki/Jocelyn_Bell_Burnell), who together with Antony Hewish first discovered Pulsars when she was a postgraduate student. Antony Hewish, her supervisor, was awarded the Nobel price in Physics for the discovery. Burnell herself was omitted.
