@@ -46,10 +46,10 @@ RBD::MicroTimer divTimer;
 
 // array of divisions for clock divider
 uint16_t divs[4][8] = {
-  {100, 200, 400, 800, 1600, 3200, 6400, 12800},  // internal clock
-  {100, 200, 400, 800, 1600, 3200, 6400, 12800}, // power of two
-  {200, 300, 500, 700, 1100, 1300, 1700,  1900}, // prime numbers
-  {200, 300, 500, 800, 1300, 2100, 3400,  5500}, // fibonacci sequence
+  {100, 200, 400,  800, 1600, 3200,  6400, 12800}, // internal clock
+  {200, 400, 800, 1600, 3200, 6400, 12800, 25600}, // power of two
+  {200, 300, 500,  700, 1100, 1300,  1700,  1900}, // prime numbers
+  {200, 300, 500,  800, 1300, 2100,  3400,  5500}, // fibonacci sequence
 };
 
 uint16_t speedMin = 10;
@@ -117,9 +117,9 @@ void setup() {
     Serial.begin(9600);
   
     Serial.print("gate length range is: ");
-    Serial.print(gateMin);
+    Serial.print(GATELEN_MIN);
     Serial.print(" - ");
-    Serial.println(gateMax);
+    Serial.println(GATELEN_MAX);
     Serial.println("-------------------");
   #endif
 }
@@ -164,6 +164,8 @@ void loop() {
 
 /**
  * resets all counters
+ * 
+ * doubles as pin change interrupt handler
  */
 void reset() {
   clockState     = 0x00;
@@ -242,20 +244,6 @@ void advanceClock() {
 }
 
 /**
- * interrupt handler when a rising signal on the clock division pin was detected.
- */
-void handleDivClockTrigger() {
-  volatile uint32_t now = micros();
-
-  divInterruptTime1 = divInterruptTime2;
-  divInterruptTime2 = now;
-  divClkSpeed = (divInterruptTime2 - divInterruptTime1) / 100.0;
-
-  divTimer.setTimeout(divClkSpeed);
-  divTimer.restart();
-}
-
-/**
  * advances the clock divider, called by TimerOne
  */
 void advanceDivClock() {
@@ -273,10 +261,39 @@ void advanceDivClock() {
   writeRegisters(clockState, divState);
 }
 
+/**
+ * interrupt handler when a rising signal on the clock division pin was detected.
+ */
+void handleDivClockTrigger() {
+  uint32_t now = micros();
+  uint8_t remainder = (divResCount % 100);
+
+  // calculate new clock speed
+  divInterruptTime1 = divInterruptTime2;
+  divInterruptTime2 = now;
+  divClkSpeed = (divInterruptTime2 - divInterruptTime1) / 100.0;
+
+  // update the timer
+  divTimer.setTimeout(divClkSpeed);
+  divTimer.restart();
+
+  // correct the divisor count to a multiple of 100 to stay in sync with triggers
+  if (remainder > 0) {
+    divResCount += 99 - remainder;
+    // using 99 so the next call to advanceDivClock() rolls it over to 100
+  }
+}
+
+/**
+ * pin change interrupt handler
+ */
 void handleGateModeChange() {
   gateMode = !gateMode;
 }
 
+/**
+ * pin change interrupt handler
+ */
 void handleStartStop() {
   started = !started;
 
