@@ -1176,11 +1176,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.8284272"
-     inkscape:cx="381.81821"
-     inkscape:cy="856.83873"
+     inkscape:zoom="2.0000001"
+     inkscape:cx="352.33344"
+     inkscape:cy="982.90917"
      inkscape:document-units="mm"
-     inkscape:current-layer="g8254"
+     inkscape:current-layer="g7805"
      showgrid="true"
      inkscape:window-width="1920"
      inkscape:window-height="1057"
@@ -1268,7 +1268,7 @@
            id="tspan36428-0-7-25-0-48-2-9"
            x="106.18968"
            y="37.372093"
-           style="font-size:3.49250054px;stroke-width:0.65484375">Rev. B</tspan></text>
+           style="font-size:3.49250054px;stroke-width:0.65484375">Rev. C</tspan></text>
     </g>
     <text
        xml:space="preserve"
@@ -9947,7 +9947,7 @@
            y="161.63756"
            x="41.219215"
            id="tspan36428-0-7-7-9-75-7-0-7-3-6-1-22-9-1"
-           sodipodi:role="line">RST_PIN</tspan></text>
+           sodipodi:role="line">RST_LED</tspan></text>
       <text
          id="text36430-4-4-17-3-48-88-9-1-1-6-6-8-8-2-2"
          y="148.93756"
@@ -12565,7 +12565,7 @@
          cy="175.27396"
          cx="-152.22028"
          id="path823-5-6-2-4-4"
-         style="display:inline;fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.06665935;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+         style="display:inline;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.06665935;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
       <circle
          transform="rotate(-90)"
          r="0.45000005"
@@ -21947,6 +21947,17 @@
              y="97.913361"
              style="font-size:0.86719656px;text-align:center;text-anchor:middle;stroke-width:0.17636953">C13</tspan></text>
       </g>
+      <text
+         id="text36430-4-4-17-3-48-88-9-1-1-6-6-4-9-48-3"
+         y="151.47868"
+         x="173.9462"
+         style="font-style:normal;font-weight:normal;font-size:1.30079472px;line-height:1.25;font-family:sans-serif;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;display:inline;opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.17636953"
+         xml:space="preserve"><tspan
+           style="font-size:0.8671965px;text-align:start;text-anchor:start;stroke-width:0.17636953"
+           y="151.47868"
+           x="173.9462"
+           id="tspan36428-0-7-7-9-75-7-0-7-3-6-1-89-1-4-9"
+           sodipodi:role="line">CLK_LED</tspan></text>
     </g>
     <text
        xml:space="preserve"
