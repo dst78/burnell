@@ -1,3 +1,14 @@
+/**
+ * Anoikis Nomads :: Burnell
+ * Eurorack clock and clock divider module
+ * 
+ * All information on Burnell is on github: https://github.com/dst78/burnell
+ * 
+ * Released under Creative Commons Attribution-ShareAlike 3.0 Unported
+ * https://creativecommons.org/licenses/by-sa/3.0/deed.de 
+ * 
+ * Pins and settings below are for an Arduino Nano.
+ */
 #include <PinChangeInterrupt.h>
 #include <PinChangeInterruptBoards.h>
 #include <PinChangeInterruptPins.h>
@@ -7,22 +18,18 @@
 RBD::MicroTimer clockTimer;
 RBD::MicroTimer divTimer;
 
-#define DEBUG false
-
+//---- configure pins 
 // input pins w/ interrupt
 #define DIV_IN            2
 #define RESET_IN          3
-
 // digital output pins
 #define SHIFTREG_SER      4
 #define SHIFTREG_RCLK     5
 #define SHIFTREG_SRCLK    6
 #define RST_OUT           7
-
 // digital input pins
 #define GATEMODE_IN       8
 #define STARTSTOP_IN      9
-
 // analog input pins
 #define SPEED_IN         A2
 #define GATELEN_IN       A1
@@ -34,19 +41,18 @@ RBD::MicroTimer divTimer;
 #define DIVMODE_POW       1
 #define DIVMODE_PRIME     2
 #define DIVMODE_FIBONACCI 3
-
+#define GATEMODE_VARIABLE true
+#define GATEMODE_FIXED    false
+#define STARTED           true
+#define STOPPED           false
+// gate length range in percent
 #define GATELEN_MIN       5
 #define GATELEN_MAX      95
+// clock speed in BPM
 #define CLOCK_SPEED_MIN  10
 #define CLOCK_SPEED_MAX 300
 
-#define GATEMODE_VARIABLE true
-#define GATEMODE_FIXED    false
-
-#define STARTED           true
-#define STOPPED           false
-
-// array of divisions for clock divider
+// array of divisions for clock and clock divider, in 100ths
 uint16_t divs[4][8] = {
   {100, 200, 400,  800, 1600, 3200,  6400, 12800}, // internal clock
   {200, 400, 800, 1600, 3200, 6400, 12800, 25600}, // power of two
@@ -56,8 +62,8 @@ uint16_t divs[4][8] = {
 
 double clkSpeed;
 uint16_t gateLen;
-volatile bool gateMode;
-volatile bool started;
+volatile bool gateMode = GATEMODE_FIXED;
+volatile bool started  = STOPPED;
 
 volatile uint8_t clockState;
 volatile uint16_t clkResCount;
@@ -71,28 +77,33 @@ volatile uint32_t divInterruptTime1, divInterruptTime2;
 
 
 void setup() {
-  started  = STARTED;
-  gateMode = GATEMODE_FIXED;
-  divMode  = DIVMODE_POW;
-  
-  // set up interrupt pins
+  // will be overridden in the first call of loop() so this initial value shouldn't ever be used
+  divMode  = DIVMODE_POW; 
+
+  // configure pins
+  // interrupt pin
   pinMode(DIV_IN, INPUT);
-  
-  // set up digital output pins
+  // digital output pins
   pinMode(SHIFTREG_SER, OUTPUT);
   pinMode(SHIFTREG_RCLK, OUTPUT);
   pinMode(SHIFTREG_SRCLK, OUTPUT);
   pinMode(RST_OUT, OUTPUT);
-  
-  // set up digital input pins
-  attachPCINT(digitalPinToPCINT(GATEMODE_IN), handleGateModeChange, RISING);
-  attachPCINT(digitalPinToPCINT(STARTSTOP_IN), handleStartStop, RISING);
-  attachPCINT(digitalPinToPCINT(RESET_IN), reset, RISING);
-
-  // set up analog input pins
+  // analog input pins
   pinMode(SPEED_IN, INPUT);
   pinMode(GATELEN_IN, INPUT);
   pinMode(DIVMODE_IN, INPUT);
+  // digital input pins
+  pinMode(STARTSTOP_IN, INPUT_PULLUP);
+  pinMode(GATEMODE_IN, INPUT_PULLUP);
+
+  // read startup values
+  if (digitalRead(STARTSTOP_IN) == HIGH) {started = STARTED;}
+  if (digitalRead(GATEMODE_IN) == HIGH) {gateMode = GATEMODE_VARIABLE;}
+  
+  // set up pin change interrupts
+  attachPCINT(digitalPinToPCINT(GATEMODE_IN), handleGateModeChange, CHANGE);
+  attachPCINT(digitalPinToPCINT(STARTSTOP_IN), handleStartStop, CHANGE);
+  attachPCINT(digitalPinToPCINT(RESET_IN), reset, RISING);
 
   /**
    * 1 beat is giving BPM
@@ -101,7 +112,7 @@ void setup() {
    * with adjustable gatelengths we need to be precise to 100th of 1/32ths.
    */
   clkSpeed    = 10000.0 / (map(389, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX) / 7.5); // 120 BPM in 3200ths resolution
-  gateLen     = map(512, 0, 1023, GATELEN_MIN, GATELEN_MAX);
+  gateLen     = map(512, 0, 1023, GATELEN_MIN, GATELEN_MAX); // 50% initial gate length
   clockTimer.setTimeout(clkSpeed);
 
   divClkSpeed = 0;
@@ -112,25 +123,28 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(DIV_IN), handleDivClockTrigger, RISING);
   // reset clock & update registers
   reset();
-
-  #if DEBUG
-    Serial.begin(9600);
-  
-    Serial.print("gate length range is: ");
-    Serial.print(GATELEN_MIN);
-    Serial.print(" - ");
-    Serial.println(GATELEN_MAX);
-    Serial.println("-------------------");
-  #endif
 }
 
 void loop() {
-  double raw, bpm, clockUs;
+  double rawSpeed, bpm, clockUs;
 
-  gateLen = (float) map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
-  
-  raw     = analogRead(SPEED_IN);
-  bpm     = map(raw, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
+  // determine clock divider mode
+  uint16_t divModeVoltage = analogRead(DIVMODE_IN);
+
+  if (divModeVoltage < 102) {
+    divMode = DIVMODE_PRIME;
+  } else if (divModeVoltage < 491) {
+    divMode = DIVMODE_FIBONACCI;
+  } else {
+    divMode = DIVMODE_POW;
+  }
+
+  // read relative gate length
+  gateLen   = (float) map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
+
+  // read raw clock speed and calculate interrupts
+  rawSpeed  = analogRead(SPEED_IN);
+  bpm       = map(rawSpeed, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
   // 10000 is 100ths of 1000000 which is 1 sec in microseconds
   // 7.5 is 1/8ths of 60, which gives us 1/32ths resolution
   clockUs = 10000.0 / (bpm / 7.5);  
@@ -138,24 +152,13 @@ void loop() {
   if (clockUs != clkSpeed) {
     clkSpeed = clockUs;
     clockTimer.setTimeout(clkSpeed);
-
-    #if DEBUG
-      Serial.print(" raw: ");
-      Serial.print(raw);
-      Serial.print(" bpm: ");
-      Serial.print(bpm);
-      Serial.print(" clock uS: ");
-      Serial.print(clockUs);
-      Serial.print(" gateLen: ");
-      Serial.println(gateLen);
-    #endif
   }
 
+  // advance clocks
   if (started) {
     if (clockTimer.onRestart()) {
       advanceClock();
     }
-  
     if (divTimer.onRestart()) {
       advanceDivClock();
     }
@@ -206,7 +209,6 @@ int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint1
     if (ticks % ticksThreshold == hiLen * hiLenMult) {
       // set low
       mask &= ~(1 << bitv);
-      
     } else if (ticks % ticksThreshold == 0) {
       // set high
       mask |= (1 << bitv);
@@ -217,7 +219,6 @@ int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint1
     if (ticks % ticksThreshold == hiLen) {
       // set low
       mask &= ~(1 << bitv);
-      
     } else if (ticks % ticksThreshold == 0) {
       // set high
       mask |= (1 << bitv);
@@ -288,14 +289,26 @@ void handleDivClockTrigger() {
  * pin change interrupt handler
  */
 void handleGateModeChange() {
-  gateMode = !gateMode;
+  uint8_t trigger = getPinChangeInterruptTrigger(digitalPinToPCINT(GATEMODE_IN));
+
+  if (trigger == RISING) {
+    gateMode = GATEMODE_VARIABLE;
+  } else if (trigger == FALLING) {
+    gateMode = GATEMODE_FIXED;
+  }
 }
 
 /**
  * pin change interrupt handler
  */
 void handleStartStop() {
-  started = !started;
-
-  if (!started) {writeRegisters(0x00, 0x00);}
+  // Differenciate between RISING and FALLING on mode CHANGE.
+  uint8_t trigger = getPinChangeInterruptTrigger(digitalPinToPCINT(STARTSTOP_IN));
+  
+  if (trigger == RISING) {
+    started = STARTED;
+  } else if (trigger == FALLING) {
+    started = STOPPED;
+    writeRegisters(0x00, 0x00); // pull all outputs low
+  } 
 }

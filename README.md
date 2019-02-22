@@ -27,6 +27,15 @@ The divider can be switched between three modes, which changes the outputs to:
 
 The gate / trigger toggle switch of the clock section affects the gate length of the clock divider in the same way that it affects the clock outputs.
 
+
+## Technical Specifications
+The module is 12 HE wide.
+
+Power consumption:
+- 5V: 20mA
+- +12V: 25mA
+- -12V: 25mA
+
 ## What's in the name
 The module was named after [Jocelyn Bell Burnell](https://en.wikipedia.org/wiki/Jocelyn_Bell_Burnell), who together with Antony Hewish first discovered Pulsars when she was a postgraduate student. Antony Hewish, her supervisor, was awarded the Nobel price in Physics for the discovery. Burnell herself was omitted.
 
