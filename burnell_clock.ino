@@ -27,6 +27,7 @@ RBD::MicroTimer divTimer;
 #define SHIFTREG_RCLK     5
 #define SHIFTREG_SRCLK    6
 #define RST_OUT           7
+#define RST_LED           A4
 // digital input pins
 #define GATEMODE_IN       8
 #define STARTSTOP_IN      9
@@ -88,6 +89,7 @@ void setup() {
   pinMode(SHIFTREG_RCLK, OUTPUT);
   pinMode(SHIFTREG_SRCLK, OUTPUT);
   pinMode(RST_OUT, OUTPUT);
+  pinMode(RST_LED, OUTPUT);
   // analog input pins
   pinMode(SPEED_IN, INPUT);
   pinMode(GATELEN_IN, INPUT);
@@ -177,9 +179,12 @@ void reset() {
   divResCount    = 0;
 
   digitalWrite(RST_OUT, HIGH);
+  digitalWrite(RST_LED, HIGH);
   delay(5);
   digitalWrite(RST_OUT, LOW);
   writeRegisters(clockState, divState);
+  delay(195);
+  digitalWrite(RST_LED, LOW);
 }
 
 /**
