@@ -76,6 +76,9 @@ volatile uint16_t divResCount;
 volatile double divClkSpeed;
 volatile uint32_t divInterruptTime1, divInterruptTime2;
 
+// loopCount is used to read values only every so often in order to increase the maximum BPM
+uint8_t loopCount;
+
 void setup() {
   // will be overridden in the first call of loop() so this initial value shouldn't ever be used
   divMode  = DIVMODE_POW; 
@@ -121,35 +124,45 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(DIV_IN), handleDivClockTrigger, RISING);
   // initialize clocks & update registers
   initClocks();
+
+  // initialize loopCount
+  loopCount = 0;
 }
 
 void loop() {
   double rawSpeed, bpm, clockUs;
 
-  // determine clock divider mode
-  uint16_t divModeVoltage = analogRead(DIVMODE_IN);
-
-  if (divModeVoltage < 102) {
-    divMode = DIVMODE_PRIME;
-  } else if (divModeVoltage < 491) {
-    divMode = DIVMODE_FIBONACCI;
-  } else {
-    divMode = DIVMODE_POW;
+  // loopCount is used to read values only every so often in order to increase the maximum BPM
+  if (loopCount == 0) {
+    // determine clock divider mode
+    uint16_t divModeVoltage = analogRead(DIVMODE_IN);
+  
+    if (divModeVoltage < 102) {
+      divMode = DIVMODE_PRIME;
+    } else if (divModeVoltage < 491) {
+      divMode = DIVMODE_FIBONACCI;
+    } else {
+      divMode = DIVMODE_POW;
+    }
   }
 
-  // read relative gate length
-  gateLen   = map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
+  if (loopCount == 85) {
+    // read relative gate length
+    gateLen   = map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
+  }
 
-  // read raw clock speed and calculate interrupts
-  rawSpeed  = analogRead(SPEED_IN);
-  bpm       = map(rawSpeed, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
-  // 10000 is 100ths of 1000000 which is 1 sec in microseconds
-  // 7.5 is 1/8ths of 60, which gives us 1/32ths resolution
-  clockUs = 10000.0 / (bpm / 7.5);
-  
-  if (clockUs != clkSpeed) {
-    clkSpeed = clockUs;
-    clockTimer.setTimeout(clkSpeed);
+  if (loopCount == 170) {
+    // read raw clock speed and calculate interrupts
+    rawSpeed  = analogRead(SPEED_IN);
+    bpm       = map(rawSpeed, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
+    // 10,000 is 100ths of 1,000,000 which is 1 sec in microseconds
+    // 7.5 is 1/8ths of 60, which gives us 1/32ths resolution
+    clockUs = 10000.0 / (bpm / 7.5);
+    
+    if (clockUs != clkSpeed) {
+      clkSpeed = clockUs;
+      clockTimer.setTimeout(clkSpeed);
+    }
   }
 
   // advance clocks
@@ -157,10 +170,14 @@ void loop() {
     if (clockTimer.onRestart()) {
       advanceClock();
     }
+    /*
     if (divTimer.onRestart()) {
       advanceDivClock();
     }
-  }
+    */
+  }  
+  
+  loopCount++;
 }
 
 /**
