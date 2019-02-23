@@ -138,7 +138,7 @@ void loop() {
   }
 
   // read relative gate length
-  gateLen   = (float) map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
+  gateLen   = map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
 
   // read raw clock speed and calculate interrupts
   rawSpeed  = analogRead(SPEED_IN);
