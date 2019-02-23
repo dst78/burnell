@@ -76,7 +76,6 @@ volatile uint16_t divResCount;
 volatile double divClkSpeed;
 volatile uint32_t divInterruptTime1, divInterruptTime2;
 
-
 void setup() {
   // will be overridden in the first call of loop() so this initial value shouldn't ever be used
   divMode  = DIVMODE_POW; 
@@ -146,7 +145,7 @@ void loop() {
   bpm       = map(rawSpeed, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX);
   // 10000 is 100ths of 1000000 which is 1 sec in microseconds
   // 7.5 is 1/8ths of 60, which gives us 1/32ths resolution
-  clockUs = 10000.0 / (bpm / 7.5);  
+  clockUs = 10000.0 / (bpm / 7.5);
   
   if (clockUs != clkSpeed) {
     clkSpeed = clockUs;
@@ -224,9 +223,8 @@ void writeRegisters(uint8_t clk, int8_t divi) {
  * @return uint8_t                   the manipulate clock mask
  */
 int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint16_t hiLen, uint16_t hiLenMult, uint8_t bitv) {
-
   if (gateMode == GATEMODE_VARIABLE) {
-    if (ticks % ticksThreshold == hiLen * hiLenMult) {
+    if (ticks % ticksThreshold >= hiLen * hiLenMult) {
       // set low
       mask &= ~(1 << bitv);
     } else if (ticks % ticksThreshold == 0) {
@@ -236,7 +234,7 @@ int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint1
     
   } else {
     // fixed gateMode
-    if (ticks % ticksThreshold == hiLen) {
+    if (ticks % ticksThreshold >= hiLen) {
       // set low
       mask &= ~(1 << bitv);
     } else if (ticks % ticksThreshold == 0) {
@@ -249,11 +247,9 @@ int setRegisterBits(uint8_t mask, uint16_t ticks, uint16_t ticksThreshold, uint1
 }
 
 /**
- * advances the internal clock, called by TimerOne
+ * advances the internal clock
  */
 void advanceClock() {
-  clkResCount++;
-
   // set relevant clock bits hi/lo according to our metric
   clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][0], gateLen,  1, 0);
   clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][1], gateLen,  2, 1);
@@ -262,14 +258,15 @@ void advanceClock() {
   clockState = setRegisterBits(clockState, clkResCount, divs[DIVMODE_CLOCK][5], gateLen, 32, 5);
   
   writeRegisters(clockState, divState);
+  
+  // modulo operation on clkResCount to prevent overflow add fractions of 100
+  clkResCount = (clkResCount + 1) % divs[DIVMODE_CLOCK][7];
 }
 
 /**
  * advances the clock divider, called by TimerOne
  */
 void advanceDivClock() {
-  divResCount++;
-
   divState = setRegisterBits(divState, divResCount, divs[divMode][0], gateLen, divs[divMode][0] / 100, 0);
   divState = setRegisterBits(divState, divResCount, divs[divMode][1], gateLen, divs[divMode][1] / 100, 1);
   divState = setRegisterBits(divState, divResCount, divs[divMode][2], gateLen, divs[divMode][2] / 100, 2);
@@ -280,6 +277,9 @@ void advanceDivClock() {
   divState = setRegisterBits(divState, divResCount, divs[divMode][7], gateLen, divs[divMode][7] / 100, 7);
 
   writeRegisters(clockState, divState);
+  
+  // modulo operation on clkResCount to prevent overflow add fractions of 100
+  divResCount = (divResCount + 1) % divs[divMode][7];
 }
 
 /**
@@ -300,8 +300,7 @@ void handleDivClockTrigger() {
 
   // correct the divisor count to a multiple of 100 to stay in sync with triggers
   if (remainder > 0) {
-    divResCount += 99 - remainder;
-    // using 99 so the next call to advanceDivClock() rolls it over to 100
+    divResCount += 100 - remainder;
   }
 }
 
