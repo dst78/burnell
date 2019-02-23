@@ -42,7 +42,7 @@ Burnell requires the following libraries:
 - [PinChangeInterrupt](https://github.com/NicoHood/PinChangeInterrupt) by [Nico Hood](https://github.com/NicoHood) (version 1.2.6 confirmed to work) - also available directly through the library manager in the Arduino IDE
 - [RBD_MicroTimer](https://github.com/dst78/arduinolib_RBD_MicroTimer) by [myself](https://github.com/dst78/) (version 1.4.1 confirmed to work).
 
-**Do NOT use the RBD_Timer library found in the library manager**! It operates on milliseconds rather than microseconds and will not provide the resolution required for smooth clocks at higher BPM settings. Use my fork linked below instead and install it manually.
+**Do NOT use the RBD_Timer library found in the library manager**! It operates on milliseconds rather than microseconds and will not provide the resolution required for smooth clocks at higher BPM settings. Use my fork linked above instead and install it manually.
 
 See the [Arduino Guide](https://www.arduino.cc/en/guide/libraries#toc5) on how to install a library manually if you're not sure how to do that.
 
