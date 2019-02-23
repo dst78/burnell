@@ -70,8 +70,8 @@ volatile uint8_t clockState;
 volatile uint16_t clkResCount;
 
 uint8_t divMode;
-uint8_t divState;
 
+volatile uint8_t divState;
 volatile uint16_t divResCount;
 volatile double divClkSpeed;
 volatile uint32_t divInterruptTime1, divInterruptTime2;
@@ -94,9 +94,6 @@ void setup() {
   pinMode(SPEED_IN, INPUT);
   pinMode(GATELEN_IN, INPUT);
   pinMode(DIVMODE_IN, INPUT);
-  // digital input pins
-  pinMode(STARTSTOP_IN, INPUT_PULLUP);
-  pinMode(GATEMODE_IN, INPUT_PULLUP);
 
   // read startup values
   if (digitalRead(STARTSTOP_IN) == HIGH) {started = STARTED;}
@@ -105,7 +102,7 @@ void setup() {
   // set up pin change interrupts
   attachPCINT(digitalPinToPCINT(GATEMODE_IN), handleGateModeChange, CHANGE);
   attachPCINT(digitalPinToPCINT(STARTSTOP_IN), handleStartStop, CHANGE);
-  attachPCINT(digitalPinToPCINT(RESET_IN), reset, RISING);
+  attachPCINT(digitalPinToPCINT(RESET_IN), reset, CHANGE);
 
   /**
    * 1 beat is giving BPM
@@ -123,8 +120,8 @@ void setup() {
 
   // attach interrupt to clock division input
   attachInterrupt(digitalPinToInterrupt(DIV_IN), handleDivClockTrigger, RISING);
-  // reset clock & update registers
-  reset();
+  // initialize clocks & update registers
+  initClocks();
 }
 
 void loop() {
@@ -168,23 +165,41 @@ void loop() {
 }
 
 /**
+ * initializes the timers and registers
+ */
+void initClocks() {
+  clockState     = 0x00;
+  divState       = 0x00;  
+  clkResCount    = 0;
+  divResCount    = 0;
+  
+  writeRegisters(clockState, divState);
+}
+
+/**
  * resets all counters
  * 
  * doubles as pin change interrupt handler
  */
 void reset() {
-  clockState     = 0x00;
-  divState       = 0x00;  
-  clkResCount    = 0;
-  divResCount    = 0;
+  uint8_t trigger = getPinChangeInterruptTrigger(digitalPinToPCINT(RESET_IN));
 
-  digitalWrite(RST_OUT, HIGH);
-  digitalWrite(RST_LED, HIGH);
-  delay(5);
-  digitalWrite(RST_OUT, LOW);
-  writeRegisters(clockState, divState);
-  delay(195);
-  digitalWrite(RST_LED, LOW);
+  if (trigger == FALLING) {
+    clockTimer.stop();
+    divTimer.stop();
+    
+    initClocks();
+  
+    digitalWrite(RST_OUT, HIGH);
+    digitalWrite(RST_LED, HIGH);
+    
+  } else if (trigger == RISING) {
+    clockTimer.restart();
+    divTimer.restart();
+    
+    digitalWrite(RST_OUT, LOW);
+    digitalWrite(RST_LED, LOW);
+  }
 }
 
 /**
