@@ -72,6 +72,12 @@ uint16_t subDivs[4][8] = {
   {0, 0, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, 0, 0}
 };
+/**
+ * least common multiples for all steps in all division modes.
+ * used to modulo the clock counters in a way that they never
+ * overflow at a position where any of the digits skip a beat.
+ */
+uint32_t lcms[4] = {128, 256, 9699690, 2042040};
 
 /**
  * interval length of the clock timer in microseconds
@@ -102,7 +108,7 @@ volatile uint8_t clockState;
 /**
  * internal counter of the clock, counting CLOCK_RESOLUTION steps per 32ths
  */
-volatile uint16_t clkResCount;
+volatile uint32_t clkResCount;
 
 /**
  * indicates the clock divider mode. derived from the voltage at DIVMODE_IN.
@@ -116,7 +122,7 @@ volatile uint8_t divState;
 /**
  * internal counter of the clock divider. counting CLOCK_RESOLUTION steps per divider input signal.
  */
-volatile uint16_t divResCount;
+volatile uint32_t divResCount;
 /**
  * internal speed of the timer handling the clock divider, in microseconds.
  * derived from the time passing between HIGH signals on DIV_IN
@@ -332,7 +338,7 @@ void advanceClock() {
   writeRegisters(clockState, divState);
   
   // modulo operation on clkResCount to prevent overflow at fractions of CLOCK_RESOLUTION
-  clkResCount = (clkResCount + 1) % subDivs[DIVMODE_CLOCK][7];
+  clkResCount = (clkResCount + 1) % lcms[DIVMODE_CLOCK];
 }
 
 /**
@@ -351,7 +357,7 @@ void advanceDivClock() {
   writeRegisters(clockState, divState);
   
   // modulo operation on clkResCount to prevent overflow at fractions of CLOCK_RESOLUTION
-  divResCount = (divResCount + 1) % subDivs[divMode][7];
+  divResCount = (divResCount + 1) % lcms[divMode];
 }
 
 /**
@@ -413,6 +419,8 @@ void correctClockResolution() {
     for (uint8_t j = 0; j < 8; j++) {
       subDivs[i][j] = divs[i][j] * CLOCK_RESOLUTION;
     }
+
+    lcms[i] = lcms[i] * CLOCK_RESOLUTION;
   }
 
   // map gatelengths relative to CLOCK_RESOLUTION as well
