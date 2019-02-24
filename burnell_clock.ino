@@ -49,19 +49,23 @@ RBD::MicroTimer divTimer;
 // gate length range in percent
 #define GATELEN_MIN       5
 #define GATELEN_MAX      95
-// clock speed in BPM
+// clock speed and speed range in BPM
 #define CLOCK_SPEED_MIN  10
 #define CLOCK_SPEED_MAX 300
 #define CLOCK_RESOLUTION 22.0
 
-// raw array of divisions for clock and clock divider
+/**
+ * raw array of divisions for clock and clock divider
+ */
 uint16_t divs[4][8] = {
   {1, 2, 4,  8, 16, 32,  64, 128}, // internal clock
   {2, 4, 8, 16, 32, 64, 128, 256}, // power of two
   {2, 3, 5,  7, 11, 13,  17,  19}, // prime numbers
   {2, 3, 5,  8, 13, 21,  34,  55}, // fibonacci sequence
 };
-// hiked up divisions, will be calculated dynamically based on CLOCK_RESOLUTION
+/**
+ * hiked up divisions, will be calculated dynamically based on CLOCK_RESOLUTION
+ */
 uint16_t subDivs[4][8] = {
   {0, 0, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, 0, 0},
@@ -69,23 +73,64 @@ uint16_t subDivs[4][8] = {
   {0, 0, 0, 0, 0, 0, 0, 0}
 };
 
+/**
+ * interval length of the clock timer in microseconds
+ */
 double clkSpeed;
+
+/**
+ * current gatelength relative to CLOCK_RESOUTION / 100
+ */
 uint16_t gateLen;
+/**
+ * adjusted gatelength minimum / maximum in relation to CLOCK_RESOLUTION / 100
+ */
 uint8_t gateLenMin, gateLenMax;
+/**
+ * indicates the gate mode, derived from GATEMODE_IN
+ */
 volatile bool gateMode = GATEMODE_FIXED;
+/**
+ * whether the clock is started or stopped. derived from STARTSTOP_IN
+ */
 volatile bool started  = STOPPED;
 
+/**
+ * bit mask for the shift register. these are the clock outputs
+ */
 volatile uint8_t clockState;
+/**
+ * internal counter of the clock, counting CLOCK_RESOLUTION steps per 32ths
+ */
 volatile uint16_t clkResCount;
 
+/**
+ * indicates the clock divider mode. derived from the voltage at DIVMODE_IN.
+ */
 uint8_t divMode;
 
+/**
+ * bit mask for the shift register. these are the clock divider outputs
+ */
 volatile uint8_t divState;
+/**
+ * internal counter of the clock divider. counting CLOCK_RESOLUTION steps per divider input signal.
+ */
 volatile uint16_t divResCount;
+/**
+ * internal speed of the timer handling the clock divider, in microseconds.
+ * derived from the time passing between HIGH signals on DIV_IN
+ */
 volatile double divClkSpeed;
+/**
+ * time keeping variables to calculate divClkSpeed
+ */
 volatile uint32_t divInterruptTime1, divInterruptTime2;
 
-// loopCount is used to read values only every so often in order to increase the maximum BPM
+/**
+ * analog pins are read in loop() only when this variable overflows.
+ * this is required to save on CPU cycles and allow for fast BPM generation
+ */
 uint8_t loopCount;
 
 void setup() {
@@ -359,6 +404,10 @@ void handleStartStop() {
   } 
 }
 
+/**
+ * corrects the substep count in subDivs array according to CLOCK_RESOLUTION.
+ * will also recalculate gate length range 
+ */
 void correctClockResolution() {
   for (uint8_t i = 0; i < 4; i++) {
     for (uint8_t j = 0; j < 8; j++) {
