@@ -247,8 +247,8 @@ void loop() {
 void initClocks() {
   clockState     = 0x00;
   divState       = 0x00;  
-  clkResCount    = 0;
-  divResCount    = 0;
+  clkResCount    = 1;
+  divResCount    = 1;
   
   writeRegisters(clockState, divState);
 }
@@ -266,6 +266,7 @@ void reset() {
     divTimer.stop();
     
     initClocks();
+    started = STOPPED;
   
     digitalWrite(RST_OUT, HIGH);
     digitalWrite(RST_LED, HIGH);
@@ -273,6 +274,8 @@ void reset() {
   } else if (trigger == RISING) {
     clockTimer.restart();
     divTimer.restart();
+
+    started = STARTED;
     
     digitalWrite(RST_OUT, LOW);
     digitalWrite(RST_LED, LOW);
