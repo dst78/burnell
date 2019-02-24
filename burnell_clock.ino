@@ -71,6 +71,7 @@ uint16_t subDivs[4][8] = {
 
 double clkSpeed;
 uint16_t gateLen;
+uint8_t gateLenMin, gateLenMax;
 volatile bool gateMode = GATEMODE_FIXED;
 volatile bool started  = STOPPED;
 
@@ -124,7 +125,7 @@ void setup() {
    * with adjustable gatelengths we need to be precise to CLOCK_RESOLUTION-th of 1/32ths.
    */
   clkSpeed    = (1000000.0 / CLOCK_RESOLUTION) / (map(389, 0, 1023, CLOCK_SPEED_MIN, CLOCK_SPEED_MAX) / 7.5); // 120 BPM in 3200ths resolution
-  gateLen     = map(512, 0, 1023, GATELEN_MIN, GATELEN_MAX); // 50% initial gate length
+  gateLen     = map(512, 0, 1023, gateLenMin, gateLenMax); // 50% initial gate length
   clockTimer.setTimeout(clkSpeed);
 
   divClkSpeed = 0;
@@ -159,7 +160,7 @@ void loop() {
 
   if (loopCount == 85) {
     // read relative gate length
-    gateLen   = map(analogRead(GATELEN_IN), 0, 1023, GATELEN_MIN, GATELEN_MAX);
+    gateLen   = map(analogRead(GATELEN_IN), 0, 1023, gateLenMin, gateLenMax);
   }
 
   if (loopCount == 170) {
@@ -364,4 +365,8 @@ void correctClockResolution() {
       subDivs[i][j] = divs[i][j] * CLOCK_RESOLUTION;
     }
   }
+
+  // map gatelengths relative to CLOCK_RESOLUTION as well
+  gateLenMin = (GATELEN_MIN * CLOCK_RESOLUTION) / 100;
+  gateLenMax = (GATELEN_MAX * CLOCK_RESOLUTION) / 100;
 }
